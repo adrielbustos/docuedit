@@ -1,0 +1,20 @@
+{
+  "name": "docuedit",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "log-timestamp": "^0.3.0",
+    "open": "^8.2.1"
+  },
+  "engines": {
+    "node": "14.x"
+  },
+  "devDependencies": {},
+  "description": ""
+}

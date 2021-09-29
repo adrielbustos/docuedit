@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "express": "^4.17.1",
     "log-timestamp": "^0.3.0",
     "open": "^8.2.1"
   },

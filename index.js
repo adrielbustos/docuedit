@@ -1,8 +1,11 @@
-const express = require('express');
+const express   = require('express');
+const open      = require('open');
+const fs        = require('fs');
+const http      = require('http');
+
+require('dotenv').config();
 const app = express();
-const open = require('open');
-const fs = require('fs');
-const http = require('http');
+const port = process.env.PORT;
 
 app.get('/', function (req, res) {
     const url = "http://c1741193.ferozo.com/patroncito/public/downloads/cv.docx";
@@ -48,9 +51,11 @@ app.get('/', function (req, res) {
                         if (erro) throw err;
                         // if no error, file has been deleted successfully
                         console.log('File deleted!');
-                        process.exit();
+                        //process.exit();
                     });
                     watcher.close();
+                    res.send('exito');
+                    //process.exit();
                 });
 
             })
@@ -69,4 +74,4 @@ app.get('*', function (req, res) {
     res.send('404 Not Found');
 });
 
-app.listen(3000);
+app.listen(port);

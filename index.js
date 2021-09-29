@@ -60,5 +60,3 @@ try {
 } catch (error) {
     console.log("errp to download");
 }
-
-

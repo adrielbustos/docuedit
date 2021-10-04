@@ -1,116 +1,149 @@
-const express   = require('express');
-const open      = require('open');
-const fs        = require('fs');
-const http      = require('http');
+const { app, BrowserWindow, Menu } = require("electron");
+const url = require("url");
+const path = require("path");
 
-require('dotenv').config();
-const app = express();
-const port = process.env.PORT;
+const open = require('open');
+const fs = require('fs');
+const http = require('http');
 
-/*
-    app.get('/', function (req, res) {
-        const url = "http://c1741193.ferozo.com/patroncito/public/downloads/cv.docx";
-        const tempName = "temp.docx";
+const filewUrl = "http://c1741193.ferozo.com/patroncito/public/downloads/cv.docx"; // descargar  desde s3 de amazon
+const tempName = "cv2.docx";
 
-        const openFile = async (file) => {
-            await open(file, { wait: true });
-        }
-
-        const startWatch = (tempName) => {
-            let fsWait = false;
-            console.log(`Watching for file changes on ${tempName}`);
-            return fs.watch(`./${tempName}`, { interval: 1000 }, (event, filename) => {
-                //console.log(event);
-                if (filename) {
-                    if (fsWait) return;
-                    fsWait = setTimeout(() => {
-                        fsWait = false;
-                    }, 100);
-
-                    // TODO ACA SE PUEDE ENVIAR EL ARCHIVO TEMPORAL A OTRO SERVER
-
-                    console.log(`${filename} file Changed`);
+let templateMenu = [
+    {
+        label: "File",
+        submenu: [
+            {
+                label: "test",
+                click() {
+                    createNewWindow()
                 }
-            });
-        }
-
-        try {
-            http.get(url, function (response) {
-                const file = fs.createWriteStream(tempName);
-                response.pipe(file);
-                file.on("finish", function () {
-                    file.close();
-                    const watcher = startWatch(tempName);
-                    openFile(tempName).then(() => {
-                        console.log("file closed");
-
-                        // TODO ACA SE PUEDE ENVIAR EL ARCHIVO TEMPORAL A OTRO SERVER ANTES DE BORRARLO
-
-                        fs.unlinkSync(`./${tempName}`, function (erro) // cuando entra aca?
-                        {
-                            console.log('delete');
-                            if (erro) throw err;
-                            // if no error, file has been deleted successfully
-                            console.log('File deleted!');
-                            //process.exit();
+            },
+            {
+                label: "Load Docx",
+                click() {
+                    http.get(filewUrl, function (response) {
+                        const file = fs.createWriteStream(tempName);
+                        response.pipe(file);
+                        file.on("finish", function () {
+                            file.close();
+                            const watcher = startWatch(tempName);
+                            openFile(tempName).then(() => {
+                                // app.post('/upload', function (req, res) {
+                                //     console.log(req.files.foo); // the uploaded file object
+                                //     console.log("file closed");
+                                //     // TODO ACA SE PUEDE ENVIAR EL ARCHIVO TEMPORAL A OTRO SERVER ANTES DE BORRARLO
+                                //     fs.unlinkSync(`./${tempName}`);
+                                //     watcher.close();
+                                // });
+                                console.log("file closed");
+                                // TODO ACA SE PUEDE ENVIAR EL ARCHIVO TEMPORAL A OTRO SERVER ANTES DE BORRARLO
+                                fs.unlinkSync(`./${tempName}`);
+                                watcher.close();
+                            });
+                        })
+                        file.on("error", function (err) {
+                            console.log("Error to open stream the file");
                         });
-                        watcher.close();
-                        res.send('exito');
-                        //process.exit();
+                    }).on("error", function (e) {
+                        console.log("error to download");
                     });
+                }
+            }
+        ]
+    }
+];
 
-                })
-                file.on("error", function (err) {
-                    console.log("Error to open stream the file");
-                });
-            }).on("error", function (e) {
-                console.log("error to download");
-            });
-        } catch (error) {
-            console.log("error to download");
-        }
-    }); 
-*/
+let mainWindow;
 
+/**
+ * Functions
+ */
+
+const sendFile = (filePath) => {
+
+}
 
 const openFile = async (file) => {
-    await open(`./${tempName}`, { wait: true });
+    await open(`./${file}`, { wait: true });
 }
 
 const startWatch = (tempName) => {
     let fsWait = false;
     console.log(`Watching for file changes on ${tempName}`);
     return fs.watch(`./${tempName}`, { interval: 1000 }, (event, filename) => {
-        //console.log(event);
         if (filename) {
             if (fsWait) return;
             fsWait = setTimeout(() => {
                 fsWait = false;
-            }, 100); 
+            }, 100);
+            // TODO ACA SE PUEDE ENVIAR EL ARCHIVO TEMPORAL A OTRO SERVER ANTES DE BORRARLO
             console.log(`${filename} file Changed`);
         }
     });
 }
 
-app.get('/', function (req, res) {
-    const url = "http://c1741193.ferozo.com/patroncito/public/downloads/cv.docx";
-    const tempName = "cv.docx";
-    const watcher = startWatch(tempName).on("error", function (error) {
-        console.log(error);
+const createNewWindow = () => {
+    let newWindow = new BrowserWindow(
+        {
+            width: 400,
+            height: 350,
+            title: "New Window"
+        }
+    );
+    newWindow.setMenu(null);
+    newWindow.loadURL(url.format({
+        pathname: path.join(__dirname, "views/newWindow.html"),
+        protocol: "file",
+        slashes: true
+    }));
+    newWindow.on("closed", () => {
+        newWindow = null;
     });
-    openFile(tempName).then(() => {
-        console.log("file closed");
-        watcher.close();
-        res.send('exito');
-        //process.exit();
+}
+
+/**
+ * App manage
+ */
+
+app.on("ready", () => {
+    mainWindow = new BrowserWindow({});
+    mainWindow.loadURL(url.format({
+        pathname: path.join(__dirname, "views/index.html"),
+        protocol: "file",
+        slashes: true
+    }));
+    const mainMenu = Menu.buildFromTemplate(templateMenu);
+    Menu.setApplicationMenu(mainMenu);
+    mainWindow.on("closed", () => {
+        app.quit();
     });
-
 });
 
-app.get('*', function (req, res) {
-    res.send('404 Not Found');
-});
+if (process.env.NODE_ENV !== 'production') {
+    templateMenu.push(
+        {
+            label: "Devs Tool",
+            submenu: [
+                {
+                    label: "Show/Hide",
+                    click(item, focusedWindow) {
+                        // mainWindow.webContents.openDevTools();
+                        focusedWindow.toggleDevTools();
+                    }
+                },
+                {
+                    role: "Reload"
+                }
+            ]
+        }
+    );
+}
 
-app.listen(port, () => {
-    console.log("Escuchando el puerto: ", port);
-});
+if (process.platform === "darwin") {
+    templateMenu.unshift(
+        {
+            label: app.getName()
+        }
+    );
+}

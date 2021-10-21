@@ -9,6 +9,10 @@ const http = require('http');
 const filewUrl = "http://c1741193.ferozo.com/patroncito/public/downloads/cv.docx"; // descargar  desde s3 de amazon
 const tempName = "cv2.docx";
 
+app.setAsDefaultProtocolClient("docuedit");
+// app.setAsDefaultProtocolClient("docuedit", 'C:\\Users\\karthi\\electron-quick-start\\electron-quick-start-win32-x64\\electron-quick-start.exe');
+// this code will register the custom protocol in machine, then you can open your app using browser like quickstart://params
+
 /**
  * Functions
  */
@@ -170,11 +174,6 @@ app.on("ready", () => {
     // protocol.registerSchemesAsPrivileged([
         // { scheme: 'docuedit', privileges: { bypassCSP: true } }
     // ]);
-    
-    app.setAsDefaultProtocolClient("docuedit");
-    
-    // app.setAsDefaultProtocolClient("docuedit", 'C:\\Users\\karthi\\electron-quick-start\\electron-quick-start-win32-x64\\electron-quick-start.exe');
-    // this code will register the custom protocol in machine, then you can open your app using browser like quickstart://params
 
 });
 

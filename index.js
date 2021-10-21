@@ -13,10 +13,6 @@ const tempName = "cv2.docx";
  * Functions
  */
 
-const sendFile = (filePath) => {
-
-}
-
 const openFile = async (file) => {
     await open(`./${file}`, { wait: true });
 }
@@ -58,10 +54,6 @@ const createNewWindow = () => {
 /**
  * App manage
  */
-
-// app.setAsDefaultProtocolClient("docuedit");
-// app.setAsDefaultProtocolClient("docuedit", 'C:\\Users\\karthi\\electron-quick-start\\electron-quick-start-win32-x64\\electron-quick-start.exe');
-// this code will register the custom protocol in machine, then you can open your app using browser like quickstart://params
 
 let templateMenu = [
     {
@@ -114,8 +106,6 @@ const io = require('socket.io-client');
 const socket = io(`http://localhost:8080`);
 
 app.on("ready", () => {
-
-    app.setAsDefaultProtocolClient("docuedit");
     
     mainWindow = new BrowserWindow({
         webPreferences: {
@@ -124,16 +114,6 @@ app.on("ready", () => {
             enableRemoteModule: true
         }
     });
-
-    protocol.registerHttpProtocol('docuedit', (req, cb) => {
-        //const fullUrl = formFullTodoUrl(req.url)
-        devToolsLog('full url to open ')
-        // mainWindow.loadURL(fullUrl)
-    });
-
-    protocol.registerSchemesAsPrivileged([
-        { scheme: 'docuedit', privileges: { bypassCSP: true } }
-    ]);
 
     mainWindow.loadURL(url.format({
         pathname: path.join(__dirname, "views/index.html"),
@@ -180,6 +160,21 @@ app.on("ready", () => {
     ipcMain.on("loaded", (event, data) => {
         event.reply("isConnected", isSocketOn);
     });
+
+    protocol.registerHttpProtocol('docuedit', (req, cb) => {
+        //const fullUrl = formFullTodoUrl(req.url)
+        devToolsLog('full url to open ')
+        // mainWindow.loadURL(fullUrl)
+    });
+    
+    // protocol.registerSchemesAsPrivileged([
+        // { scheme: 'docuedit', privileges: { bypassCSP: true } }
+    // ]);
+    
+    app.setAsDefaultProtocolClient("docuedit");
+    
+    // app.setAsDefaultProtocolClient("docuedit", 'C:\\Users\\karthi\\electron-quick-start\\electron-quick-start-win32-x64\\electron-quick-start.exe');
+    // this code will register the custom protocol in machine, then you can open your app using browser like quickstart://params
 
 });
 

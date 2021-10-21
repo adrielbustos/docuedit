@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { app, BrowserWindow, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, protocol } = require("electron");
 const path = require("path");
 const open = require('open');
 const url = require("url");
@@ -59,6 +59,10 @@ const createNewWindow = () => {
  * App manage
  */
 
+// app.setAsDefaultProtocolClient("docuedit");
+// app.setAsDefaultProtocolClient("docuedit", 'C:\\Users\\karthi\\electron-quick-start\\electron-quick-start-win32-x64\\electron-quick-start.exe');
+// this code will register the custom protocol in machine, then you can open your app using browser like quickstart://params
+
 let templateMenu = [
     {
         label: "File",
@@ -110,14 +114,26 @@ const io = require('socket.io-client');
 const socket = io(`http://localhost:8080`);
 
 app.on("ready", () => {
+
+    app.setAsDefaultProtocolClient("docuedit");
     
     mainWindow = new BrowserWindow({
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
-            enableRemoteModule: true,
+            enableRemoteModule: true
         }
     });
+
+    protocol.registerHttpProtocol('docuedit', (req, cb) => {
+        //const fullUrl = formFullTodoUrl(req.url)
+        devToolsLog('full url to open ')
+        // mainWindow.loadURL(fullUrl)
+    });
+
+    protocol.registerSchemesAsPrivileged([
+        { scheme: 'docuedit', privileges: { bypassCSP: true } }
+    ]);
 
     mainWindow.loadURL(url.format({
         pathname: path.join(__dirname, "views/index.html"),

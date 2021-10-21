@@ -5,10 +5,12 @@
   "version": "1.0.0",
   "license": "MIT",
   "main": "index.js",
+  "postinstall": "electron-builder install-app-deps",
   "scripts": {
     "start": "electron index.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
+    "dist-mac": "electron-builder --mac",
     "package-mac": "electron-packager . --overwrite --platform=darwin --arch=x64 --icon=assets/icons/mac/icon.icns --prune=true --out=release-builds",
     "package-win": "electron-packager . electron-tutorial-app --overwrite --asar=true --platform=win32 --arch=ia32 --icon=assets/icons/win/icon.ico --prune=true --out=release-builds --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"Electron Tutorial App\"",
     "package-linux": "electron-packager . electron-tutorial-app --overwrite --asar=true --platform=linux --arch=x64 --icon=assets/icons/png/1024x1024.png --prune=true --out=release-builds"
@@ -25,8 +27,15 @@
   "keywords": [],
   "author": "",
   "build": {
-    "appId": "aloe.docu.edit",
+    "appId": "aloe.document.edit",
     "asar": true,
+    "protocols": [
+      {
+        "name": "Aloe Document Edit",
+        "role": "Viewer",
+        "schemes": ["docuedit", "documentedit", "docedit"]
+      }
+    ],
     "dmg": {
       "contents": [
         {
@@ -48,16 +57,20 @@
       ]
     },
     "win": {
-      "target": "NSIS",
+      "target": "nsis",
       "icon": "src/icon.ico",
       "requestedExecutionLevel": "requireAdministrator"
+    },
+    "mac": {
+      "category": ""
     },
     "nsis": {
       "installerIcon": "src/icon.ico",
       "uninstallerIcon": "src/icon.ico",
-      "uninstallDisplayName": "Docu edit",
+      "uninstallDisplayName": "Document edit",
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "include" : "build/installer.nsh"
     }
   },
   "dependencies": {

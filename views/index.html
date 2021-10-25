@@ -24,6 +24,19 @@
         <div id="is-offline" style="display: none;">
             <span class="text-danger" id="offline-span">Offline</span>
         </div>
+        <hr>
+        <h1 class="text-center">
+            Send By Browser:
+        </h1>
+        <div id="loading-spinner-2" class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div id="send-yes" style="display: none;">
+            <span class="text-success">Yes</span>
+        </div>
+        <div id="send-no" style="display: none;">
+            <span class="text-danger" id="offline-span">No</span>
+        </div>
     </div>
     <script>
         const electron = require('electron');
@@ -34,14 +47,22 @@
             document.getElementById("loading-spinner").style.display = "none";
             if (data)
             {
-                // const note = document.querySelector('.note');
-                // note.style.backgroundColor = 'yellow';
-                // note.style.color = 'red';
                 document.getElementById("is-offline").style.display = "none";
                 document.getElementById("is-online").style.display = "";
             } else {
                 document.getElementById("is-offline").style.display = "";
                 document.getElementById("is-online").style.display = "none";
+            }
+        });
+        ipcRenderer.on("sendByBrowser", (event, data) => {
+            document.getElementById("loading-spinner-2").style.display = "none";
+            if (data)
+            {
+                document.getElementById("send-no").style.display = "none";
+                document.getElementById("send-yes").style.display = "";
+            } else {
+                document.getElementById("send-no").style.display = "";
+                document.getElementById("send-yes").style.display = "none";
             }
         });
     </script>

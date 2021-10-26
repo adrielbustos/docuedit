@@ -1,42 +1,40 @@
-require("dotenv").config();
-const { app, BrowserWindow, Menu, ipcMain, protocol } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, protocol, dialog } = require("electron");
 const gotTheLock = app.requestSingleInstanceLock();
-const io = require('socket.io-client');
-const socket = io(`http://localhost:8080`);
 const path = require("path");
 const open = require('open');
+const axios = require('axios');
 const url = require("url");
 const fs = require('fs');
 const http = require('https');
-const axios = require('axios');
 const FormData = require('form-data');
 
-const apiUrl = "https://docu-edit-demo-api.herokuapp.com/api/file"; // descargar  desde s3 de amazon
+// const packager = require('electron-packager');
+// packager({
+//     // ...other options...
+//     protocols: [
+//         {
+//             name: 'Document Edit',
+//             schemes: ['docuedit']
+//         }
+//     ]
+// }).then(paths => console.log(`SUCCESS: Created ${paths.join(', ')}`))
+//     .catch(err => console.error(`ERROR: ${err.message}`))
+
+const apiUrl = "https://docu-edit-demo-api.herokuapp.com/api/file";
+let fileName = ""
+// let apiUrl = "";
 const tempName = "temp-document.docx";
 
 let mainWindow;
 let deeplinkingUrl;
 
-app.setAsDefaultProtocolClient("docuedit");
-
-// if (!gotTheLock) {
-//     app.quit();
-//     return;
-// } else {
-    
-//     app.on('second-instance', (e, argv) => {
-//         devToolsLog('second-instance');
-//         if (process.platform !== 'darwin') {
-//             // Find the arg that is our custom protocol url and store it
-//             deeplinkingUrl = argv.find((arg) => arg.startsWith('docuedit://'));
-//         }
-
-//         if (mainWindow) {
-//             if (mainWindow.isMinimized()) mainWindow.restore();
-//             mainWindow.focus();
-//         }
-//     });
-// }
+if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient('docuedit', process.execPath, [path.resolve(process.argv[1])], ["test", "url"]);
+    }
+} else {
+    app.setAsDefaultProtocolClient('docuedit', ["test", "url"]);
+}
 
 /**
  * Functions
@@ -85,41 +83,60 @@ const createNewWindow = () => {
 
 const devToolsLog = (s) => {
     if (mainWindow && mainWindow.webContents) {
-        mainWindow.webContents.executeJavaScript(`console.log("send in protocol: ${s}")`);
+        mainWindow.webContents.executeJavaScript(`console.log("${s}")`);
     }
 }
 
 
+const isValidHttpUrl = (string) => {
+    let url;
+    try {
+      url = new URL(string);
+    } catch (_) {
+      return false;  
+    }
+    return url.protocol === "http:" || url.protocol === "https:";
+  }
+
+
 const sendFile = () => {
 
-    http.get(apiUrl, function (response) {
+    const endpoint = apiUrl + "/" + fileName;
+
+    if (
+        fileName === "" ||
+        fileName === undefined ||
+        fileName === null ||
+        !isValidHttpUrl(endpoint)
+    )
+    {
+        devToolsLog(endpoint + ": is not a valid url")
+        return null;
+    }
+
+    http.get(endpoint, function (response) {
         const file = fs.createWriteStream(tempName);
         response.pipe(file);
         file.on("finish", function () { // cuando termina de cargar el archivo en memoria
-            const watcher = startWatch(tempName); // 
-            openFile(tempName).then( async () => {
+            const watcher = startWatch(tempName);
+            openFile(tempName).then(async () => {
                 file.close();
-                //const STATIC_FOLDER = path.join(process.cwd(), tempName);
-                //let fileStream = fs.createReadStream(STATIC_FOLDER);
-                let form = new FormData();
-                const fileStream = fs.readFileSync(`./${tempName}`, {encoding:'utf8', flag:'r'});
-                console.log(fileStream);
-                // form.append('file', fileStream, tempName);
-                // axios.post(apiUrl, {"file": form}, {
-                //     headers: {
-                //         'Content-Type': 'multipart/form-data'
-                //     }
-                // }).then((res) => {
-                //     console.log('file send');
-                //     console.log(res);
-                //     fs.unlinkSync(`./${tempName}`);
-                //     watcher.close();
-                // }, (err) => {
-                //     console.log("ERROR");
-                //     console.log(err);
-                //     fs.unlinkSync(`./${tempName}`);
-                //     watcher.close();
-                // });
+                const firstFilePath = process.cwd() + "/" + tempName;
+                const formData = new FormData();
+                formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
+                const headers = {
+                    ...formData.getHeaders(),
+                    "Content-Length": formData.getLengthSync()
+                };
+                axios.post(apiUrl, formData, { headers }).then((resp) => {
+                    console.log(true, resp);
+                    fs.unlinkSync(`./${tempName}`);
+                    watcher.close();
+                }, (err) => {
+                    console.log('error', err);
+                    fs.unlinkSync(`./${tempName}`);
+                    watcher.close();
+                });
             });
         });
         file.on("error", function (err) {
@@ -161,28 +178,14 @@ function createWindow() {
 
     mainWindow.webContents.openDevTools();
 
-    const registerHttpProtocol = protocol.registerHttpProtocol('docuedit', (req, cb) => {
-        devToolsLog('registerHttpProtocol');
-    });
+    deeplinkingUrl = process.argv.find((arg) => arg.startsWith('docuedit://')); // can be undefined or null
 
-    const interceptHttpProtocol = protocol.interceptHttpProtocol('docuedit', (req, cb) => {
-        req.url;
-        devToolsLog(req.url);
-    });
-
-    const interceptBufferProtocol = protocol.interceptBufferProtocol('docuedit', (req, cb) => {
-        devToolsLog('interceptBufferProtocol');
-    });
-
-    proto = {
-        registerHttpProtocol,
-        interceptHttpProtocol,
-        interceptBufferProtocol
+    if (deeplinkingUrl !== undefined || deeplinkingUrl !== null)
+    {
+        const params = new URLSearchParams(deeplinkingUrl);
+        fileName = params.get("url");
+        // devToolsLog(params.get("url-no")); // return null
     }
-
-    // ipcMain.on("loaded", (event, data) => {
-    //     event.reply("isConnected", process.argv);
-    // });
 
 }
 
@@ -210,20 +213,36 @@ let templateMenu = [
     }
 ];
 
-app.on("ready", createWindow);
+// app.on("ready", createWindow);
 
+if (!gotTheLock) {
+    app.quit();
+} else {
 
-app.on('second-instance', (e, argv) => {
-    devToolsLog('second-instance');
-    if (process.platform !== 'darwin') {
-        // Find the arg that is our custom protocol url and store it
-        deeplinkingUrl = argv.find((arg) => arg.startsWith('docuedit://'));
-    }
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        if (process.platform !== 'darwin') {
+            // Find the arg that is our custom protocol url and store it
+            deeplinkingUrl = process.argv.find((arg) => arg.startsWith('docuedit://'));
+        }
+        // Someone tried to run a second instance, we should focus our window.
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore()
+            mainWindow.focus();
+        }
+    })
 
-    if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
-    }
+    // Create mainWindow, load the rest of the app, etc...
+    app.whenReady().then(() => {
+        createWindow();
+    });
+
+}
+
+// Handle the protocol. In this case, we choose to show an Error Box.
+app.on('open-url', (event, url) => {
+    event.preventDefault();
+    dialog.showErrorBox('Welcome Back', `You arrived from: ${url}`)
+    deeplinkingUrl = url;
 });
 
 
@@ -242,14 +261,6 @@ app.on('activate', function () {
     if (mainWindow === null) {
         createWindow();
     }
-});
-
-
-// Protocol handler for osx
-app.on('open-url', function (event, url) {
-    event.preventDefault();
-    deeplinkingUrl = url
-    devToolsLog('open-url');
 });
 
 

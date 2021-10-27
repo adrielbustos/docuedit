@@ -11,7 +11,7 @@ const FormData = require('form-data');
 const apiUrl = "https://docu-edit-demo-api.herokuapp.com/api/file";
 const tempName = "temp-document.docx";
 const protocolName = "docuedit";
-const statuses = [
+const allStatus = [
     "Waiting for file editing",  // 0
     "Openning file", // 1
     "File ready to edit",  // 2
@@ -44,14 +44,13 @@ const openFile = async (file) => {
 
 const startWatch = (tempName) => {
     let fsWait = false;
-    console.log(`Watching for file changes on ${tempName}`);
     return fs.watch(`./${tempName}`, { interval: 1000 }, (event, filename) => {
-        if (filename) {
+        if (filename && event == "change") {
             if (fsWait) return;
             fsWait = setTimeout(() => {
                 fsWait = false;
             }, 100);
-
+            // TODO: ONLY ENTER HERE ON CLICK SAVE BUTTON IN WORD
             const firstFilePath = process.cwd() + "/" + tempName;
             const formData = new FormData();
             formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
@@ -59,16 +58,13 @@ const startWatch = (tempName) => {
                 ...formData.getHeaders(),
                 "Content-Length": formData.getLengthSync()
             };
-            mainWindow.webContents.send("status", new Message(true, statuses[4]));
+            mainWindow.webContents.send("status", new Message(true, allStatus[4], true));
             axios.post(apiUrl, formData, { headers }).then((resp) => {
-                mainWindow.webContents.send("status", new Message(true, statuses[5]));
-                devToolsLog(resp);
-                console.log('saved', resp);
+                mainWindow.webContents.send("status", new Message(true, allStatus[5]));
             }, (err) => {
-                mainWindow.webContents.send("status", new Message(true, statuses[3]));
-                devToolsLog(err);
-                console.log('error', err);
+                mainWindow.webContents.send("status", new Message(true, allStatus[3]));
             });
+            console.log(event);
             console.log(`${filename} file Changed`);
         }
     });
@@ -94,25 +90,18 @@ const isValidHttpUrl = (string) => {
 
 
 const initConnection = () => {
-
-    // const endpoint = apiUrl + "/" + fileName;
-    const endpoint = apiUrl;
-
+    const endpoint = apiUrl; // TODO: borrar cando ete lista la api
     if (
         fileName === "" ||
         fileName === undefined ||
-        fileName === null ||
+        fileName == null ||
         !isValidHttpUrl(endpoint)
     ) {
-
-        mainWindow.webContents.send("status", new Message(true, statuses[3]));
-
-        devToolsLog(endpoint + ": is not a valid url");
+        mainWindow.webContents.send("status", new Message(false, allStatus[3]));
         return null;
     }
-
-    mainWindow.webContents.send("status", new Message(true, statuses[1]));
-
+    // const endpoint = apiUrl + "/" + fileName;
+    mainWindow.webContents.send("status", new Message(true, allStatus[1], true));
     http.get(endpoint, function (response) {
         const file = fs.createWriteStream(tempName);
         response.pipe(file);
@@ -122,23 +111,15 @@ const initConnection = () => {
                 file.close();
                 fs.unlinkSync(`./${tempName}`);
                 watcher.close();
-                console.log("closed");
+                mainWindow.webContents.send("status", new Message(true, allStatus[0]));
             });
-
-            mainWindow.webContents.send("status", new Message(true, statuses[2]));
-
+            mainWindow.webContents.send("status", new Message(true, allStatus[2]));
         });
         file.on("error", function (err) {
-
-            mainWindow.webContents.send("status", new Message(true, statuses[3]));
-
-            console.log("Error to open stream the file");
+            mainWindow.webContents.send("status", new Message(true, "Error to open File"));
         });
     }).on("error", function (e) {
-
-        mainWindow.webContents.send("status", new Message(true, statuses[3]));
-
-        console.log("error to download");
+        mainWindow.webContents.send("status", new Message(true, allStatus[3]));
     });
 
 }
@@ -147,13 +128,12 @@ const initConnection = () => {
 function createWindow() {
 
     mainWindow = new BrowserWindow({
-        height: 300,
-        width: 400,
+        height: 200,
+        width: 425,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
-            enableRemoteModule: true,
-            // additionalArguments: ["test", "--another=something"]
+            enableRemoteModule: true
         }
     });
 
@@ -173,23 +153,18 @@ function createWindow() {
         app.quit();
     });
 
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
 
     deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://')); // can be undefined or null
 
-    if (deeplinkingUrl !== undefined || deeplinkingUrl !== null) {
+    if (deeplinkingUrl !== undefined || deeplinkingUrl != null) {
         const params = new URLSearchParams(deeplinkingUrl);
         fileName = params.get("url"); // or return null
-        devToolsLog("filename on params: " + fileName);
     }
 
     ipcMain.on("loaded", (event, data) => {
-        devToolsLog("filename on loaded: " + fileName);
-        if (fileName === "" || fileName === null) {
-            event.reply("status", new Message(true, statuses[0]));
-        }
-        else {
-            event.reply("status", new Message(true, statuses[1]));
+        event.reply("status", new Message(true, allStatus[0]));
+        if (fileName !== "" && fileName != null) {
             initConnection();
         }
     });
@@ -209,12 +184,6 @@ let templateMenu = [
                 click() {
                     app.quit();
                 }
-            },
-            {
-                label: "Load Docx",
-                click() {
-                    initConnection();
-                }
             }
         ]
     }
@@ -225,38 +194,30 @@ if (!gotTheLock) {
 } else {
 
     app.on('second-instance', (event, commandLine, workingDirectory) => {
+        const arguments = commandLine.toString().split(",");
         if (process.platform !== 'darwin') {
             // Find the arg that is our custom protocol url and store it
-            deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://'));
+            deeplinkingUrl = arguments.find((arg) => arg.startsWith(protocolName + '://'));
         }
         // Someone tried to run a second instance, we should focus our window.
         if (mainWindow) {
-            devToolsLog(event);
-            devToolsLog(commandLine);
-            devToolsLog(workingDirectory);
-            devToolsLog(process.argv);
             if (mainWindow.isMinimized()) mainWindow.restore()
             mainWindow.focus();
-            deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://'));
-            // if (deeplinkingUrl === undefined)
-            // {
-            //     mainWindow.webContents.send("status", new Message(false, statuses[6]));
-            // }
-            // else 
-            // {
-            const params = new URLSearchParams(deeplinkingUrl);
-            fileName = params.get("url");
-            // devToolsLog(params.get("url"));
-            // devToolsLog(deeplinkingUrl);
-            if (fileName === "" || fileName === null) {
-                mainWindow.webContents.send("status", new Message(false, statuses[6]));
+            deeplinkingUrl = arguments.find((arg) => arg.startsWith(protocolName + '://'));
+            if (deeplinkingUrl === undefined) {
+                mainWindow.webContents.send("status", new Message(false, allStatus[6]));
             }
             else {
-                mainWindow.webContents.send("status", new Message(true, statuses[1]));
-                initConnection();
+                const params = new URLSearchParams(deeplinkingUrl);
+                fileName = params.get("url");
+                if (fileName === "" || fileName == null) {
+                    mainWindow.webContents.send("status", new Message(false, allStatus[6]));
+                }
+                else {
+                    initConnection();
+                }
             }
         }
-        // }
     });
 
     // Create mainWindow, load the rest of the app, etc...
@@ -286,31 +247,31 @@ app.on('window-all-closed', function () {
 app.on('activate', function () {
     // On OS X it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (mainWindow === null) {
+    if (mainWindow == null) {
         createWindow();
     }
 });
 
 
-if (process.env.NODE_ENV !== 'production') {
-    templateMenu.push(
-        {
-            label: "Devs Tool",
-            submenu: [
-                {
-                    label: "Show/Hide",
-                    click(item, focusedWindow) {
-                        // mainWindow.webContents.openDevTools();
-                        focusedWindow.toggleDevTools();
-                    }
-                },
-                {
-                    role: "Reload"
-                }
-            ]
-        }
-    );
-}
+// if (process.env.NODE_ENV !== 'production') {
+//     templateMenu.push(
+//         {
+//             label: "Devs Tool",
+//             submenu: [
+//                 {
+//                     label: "Show/Hide",
+//                     click(item, focusedWindow) {
+//                         // mainWindow.webContents.openDevTools();
+//                         focusedWindow.toggleDevTools();
+//                     }
+//                 },
+//                 {
+//                     role: "Reload"
+//                 }
+//             ]
+//         }
+//     );
+// }
 
 
 if (process.platform === "darwin") {
@@ -324,10 +285,10 @@ if (process.platform === "darwin") {
 class Message {
     status = false;
     msg = "";
-    action = "";
-    constructor(status, msg, action = null) {
+    loading = false;
+    constructor(status, msg, loading = false) {
         this.status = status;
         this.msg = msg;
-        this.action = action;
+        this.loading = loading;
     }
 }

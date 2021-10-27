@@ -12,57 +12,34 @@
 
 <body>
     <div class="container">
-        <h1 class="text-center">
-            Server Status:
+        <h1 class="display-2">
+            Status:
         </h1>
         <div id="loading-spinner" class="spinner-border" role="status">
             <span class="visually-hidden">Loading...</span>
         </div>
         <div id="is-online" style="display: none;">
-            <span class="text-success">Online</span>
+            <p class="lead" style="color: blue;" id="text-success" class="text-success">Online</p>
         </div>
         <div id="is-offline" style="display: none;">
-            <span class="text-danger" id="offline-span">Offline</span>
-        </div>
-        <hr>
-        <h1 class="text-center">
-            Send By Browser:
-        </h1>
-        <div id="loading-spinner-2" class="spinner-border" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
-        <div id="send-yes" style="display: none;">
-            <span class="text-success">Yes</span>
-        </div>
-        <div id="send-no" style="display: none;">
-            <span class="text-danger" id="offline-span">No</span>
+            <p class="lead" style="color: red;" id="text-danger" class="text-danger" id="offline-span">Offline</p>
         </div>
     </div>
     <script>
         const electron = require('electron');
         const ipcRenderer = electron.ipcRenderer;
         ipcRenderer.send("loaded", true);
-        ipcRenderer.on("isConnected", (event, data) => {
-            console.log(data);
-            document.getElementById("loading-spinner").style.display = "none";
-            if (data)
+        ipcRenderer.on("status", (event, data) => {
+            document.querySelector("#loading-spinner").style.display = "none";
+            if (data.status)
             {
-                document.getElementById("is-offline").style.display = "none";
-                document.getElementById("is-online").style.display = "";
+                document.querySelector("#is-offline").style.display = "none";
+                document.querySelector("#is-online").style.display = "";
+                document.querySelector("#text-success").innerHTML = data.msg;
             } else {
-                document.getElementById("is-offline").style.display = "";
-                document.getElementById("is-online").style.display = "none";
-            }
-        });
-        ipcRenderer.on("sendByBrowser", (event, data) => {
-            document.getElementById("loading-spinner-2").style.display = "none";
-            if (data)
-            {
-                document.getElementById("send-no").style.display = "none";
-                document.getElementById("send-yes").style.display = "";
-            } else {
-                document.getElementById("send-no").style.display = "";
-                document.getElementById("send-yes").style.display = "none";
+                document.querySelector("#is-offline").style.display = "";
+                document.querySelector("#is-online").style.display = "none";
+                document.querySelector("#text-danger").innerHTML = data.msg;
             }
         });
     </script>

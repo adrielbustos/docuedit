@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, protocol, dialog } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require("electron");
 const gotTheLock = app.requestSingleInstanceLock();
 const path = require("path");
 const open = require('open');
@@ -8,32 +8,29 @@ const fs = require('fs');
 const http = require('https');
 const FormData = require('form-data');
 
-// const packager = require('electron-packager');
-// packager({
-//     // ...other options...
-//     protocols: [
-//         {
-//             name: 'Document Edit',
-//             schemes: ['docuedit']
-//         }
-//     ]
-// }).then(paths => console.log(`SUCCESS: Created ${paths.join(', ')}`))
-//     .catch(err => console.error(`ERROR: ${err.message}`))
-
 const apiUrl = "https://docu-edit-demo-api.herokuapp.com/api/file";
-let fileName = ""
-// let apiUrl = "";
 const tempName = "temp-document.docx";
+const protocolName = "docuedit";
+const statuses = [
+    "Waiting for file editing",  // 0
+    "Openning file", // 1
+    "File ready to edit",  // 2
+    "An error occurred while getting the file",  // 3
+    "Saving changes", // 4
+    "File draft saved", // 5
+    "Invalid link" // 6
+];
 
+let fileName = ""
 let mainWindow;
 let deeplinkingUrl;
 
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient('docuedit', process.execPath, [path.resolve(process.argv[1])], ["test", "url"]);
+        app.setAsDefaultProtocolClient(protocolName, process.execPath, [path.resolve(process.argv[1])], ["url"]);
     }
 } else {
-    app.setAsDefaultProtocolClient('docuedit', ["test", "url"]);
+    app.setAsDefaultProtocolClient(protocolName, ["url"]);
 }
 
 /**
@@ -54,29 +51,26 @@ const startWatch = (tempName) => {
             fsWait = setTimeout(() => {
                 fsWait = false;
             }, 100);
-            // TODO ACA SE PUEDE ENVIAR EL ARCHIVO TEMPORAL A OTRO SERVER ANTES DE BORRARLO
+
+            const firstFilePath = process.cwd() + "/" + tempName;
+            const formData = new FormData();
+            formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
+            const headers = {
+                ...formData.getHeaders(),
+                "Content-Length": formData.getLengthSync()
+            };
+            mainWindow.webContents.send("status", new Message(true, statuses[4]));
+            axios.post(apiUrl, formData, { headers }).then((resp) => {
+                mainWindow.webContents.send("status", new Message(true, statuses[5]));
+                devToolsLog(resp);
+                console.log('saved', resp);
+            }, (err) => {
+                mainWindow.webContents.send("status", new Message(true, statuses[3]));
+                devToolsLog(err);
+                console.log('error', err);
+            });
             console.log(`${filename} file Changed`);
         }
-    });
-}
-
-
-const createNewWindow = () => {
-    let newWindow = new BrowserWindow(
-        {
-            width: 400,
-            height: 350,
-            title: "New Window"
-        }
-    );
-    newWindow.setMenu(null);
-    newWindow.loadURL(url.format({
-        pathname: path.join(__dirname, "views/newWindow.html"),
-        protocol: "file",
-        slashes: true
-    }));
-    newWindow.on("closed", () => {
-        newWindow = null;
     });
 }
 
@@ -91,28 +85,33 @@ const devToolsLog = (s) => {
 const isValidHttpUrl = (string) => {
     let url;
     try {
-      url = new URL(string);
+        url = new URL(string);
     } catch (_) {
-      return false;  
+        return false;
     }
     return url.protocol === "http:" || url.protocol === "https:";
-  }
+}
 
 
-const sendFile = () => {
+const initConnection = () => {
 
-    const endpoint = apiUrl + "/" + fileName;
+    // const endpoint = apiUrl + "/" + fileName;
+    const endpoint = apiUrl;
 
     if (
         fileName === "" ||
         fileName === undefined ||
         fileName === null ||
         !isValidHttpUrl(endpoint)
-    )
-    {
-        devToolsLog(endpoint + ": is not a valid url")
+    ) {
+
+        mainWindow.webContents.send("status", new Message(true, statuses[3]));
+
+        devToolsLog(endpoint + ": is not a valid url");
         return null;
     }
+
+    mainWindow.webContents.send("status", new Message(true, statuses[1]));
 
     http.get(endpoint, function (response) {
         const file = fs.createWriteStream(tempName);
@@ -121,28 +120,24 @@ const sendFile = () => {
             const watcher = startWatch(tempName);
             openFile(tempName).then(async () => {
                 file.close();
-                const firstFilePath = process.cwd() + "/" + tempName;
-                const formData = new FormData();
-                formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
-                const headers = {
-                    ...formData.getHeaders(),
-                    "Content-Length": formData.getLengthSync()
-                };
-                axios.post(apiUrl, formData, { headers }).then((resp) => {
-                    console.log(true, resp);
-                    fs.unlinkSync(`./${tempName}`);
-                    watcher.close();
-                }, (err) => {
-                    console.log('error', err);
-                    fs.unlinkSync(`./${tempName}`);
-                    watcher.close();
-                });
+                fs.unlinkSync(`./${tempName}`);
+                watcher.close();
+                console.log("closed");
             });
+
+            mainWindow.webContents.send("status", new Message(true, statuses[2]));
+
         });
         file.on("error", function (err) {
+
+            mainWindow.webContents.send("status", new Message(true, statuses[3]));
+
             console.log("Error to open stream the file");
         });
     }).on("error", function (e) {
+
+        mainWindow.webContents.send("status", new Message(true, statuses[3]));
+
         console.log("error to download");
     });
 
@@ -152,11 +147,13 @@ const sendFile = () => {
 function createWindow() {
 
     mainWindow = new BrowserWindow({
+        height: 300,
+        width: 400,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
             enableRemoteModule: true,
-            additionalArguments: ["test", "--another=something"]
+            // additionalArguments: ["test", "--another=something"]
         }
     });
 
@@ -178,14 +175,24 @@ function createWindow() {
 
     mainWindow.webContents.openDevTools();
 
-    deeplinkingUrl = process.argv.find((arg) => arg.startsWith('docuedit://')); // can be undefined or null
+    deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://')); // can be undefined or null
 
-    if (deeplinkingUrl !== undefined || deeplinkingUrl !== null)
-    {
+    if (deeplinkingUrl !== undefined || deeplinkingUrl !== null) {
         const params = new URLSearchParams(deeplinkingUrl);
-        fileName = params.get("url");
-        // devToolsLog(params.get("url-no")); // return null
+        fileName = params.get("url"); // or return null
+        devToolsLog("filename on params: " + fileName);
     }
+
+    ipcMain.on("loaded", (event, data) => {
+        devToolsLog("filename on loaded: " + fileName);
+        if (fileName === "" || fileName === null) {
+            event.reply("status", new Message(true, statuses[0]));
+        }
+        else {
+            event.reply("status", new Message(true, statuses[1]));
+            initConnection();
+        }
+    });
 
 }
 
@@ -198,22 +205,20 @@ let templateMenu = [
         label: "File",
         submenu: [
             {
-                label: "test",
+                label: "Close App",
                 click() {
-                    createNewWindow();
+                    app.quit();
                 }
             },
             {
                 label: "Load Docx",
                 click() {
-                    sendFile();
+                    initConnection();
                 }
             }
         ]
     }
 ];
-
-// app.on("ready", createWindow);
 
 if (!gotTheLock) {
     app.quit();
@@ -222,14 +227,37 @@ if (!gotTheLock) {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
         if (process.platform !== 'darwin') {
             // Find the arg that is our custom protocol url and store it
-            deeplinkingUrl = process.argv.find((arg) => arg.startsWith('docuedit://'));
+            deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://'));
         }
         // Someone tried to run a second instance, we should focus our window.
         if (mainWindow) {
+            devToolsLog(event);
+            devToolsLog(commandLine);
+            devToolsLog(workingDirectory);
+            devToolsLog(process.argv);
             if (mainWindow.isMinimized()) mainWindow.restore()
             mainWindow.focus();
+            deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://'));
+            // if (deeplinkingUrl === undefined)
+            // {
+            //     mainWindow.webContents.send("status", new Message(false, statuses[6]));
+            // }
+            // else 
+            // {
+            const params = new URLSearchParams(deeplinkingUrl);
+            fileName = params.get("url");
+            // devToolsLog(params.get("url"));
+            // devToolsLog(deeplinkingUrl);
+            if (fileName === "" || fileName === null) {
+                mainWindow.webContents.send("status", new Message(false, statuses[6]));
+            }
+            else {
+                mainWindow.webContents.send("status", new Message(true, statuses[1]));
+                initConnection();
+            }
         }
-    })
+        // }
+    });
 
     // Create mainWindow, load the rest of the app, etc...
     app.whenReady().then(() => {
@@ -291,4 +319,15 @@ if (process.platform === "darwin") {
             label: app.getName()
         }
     );
+}
+
+class Message {
+    status = false;
+    msg = "";
+    action = "";
+    constructor(status, msg, action = null) {
+        this.status = status;
+        this.msg = msg;
+        this.action = action;
+    }
 }

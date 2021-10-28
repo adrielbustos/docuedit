@@ -11,8 +11,9 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist-mac": "electron-builder --mac",
-    "package-mac": "electron-packager . --protocol=docuedit --overwrite --platform=darwin --arch=x64 --icon=assets/icons/mac/icon.icns --prune=true --out=release-builds",
-    "package-win": "electron-packager . --protocol=docuedit electron-tutorial-app --overwrite --asar=true --platform=win32 --arch=ia32 --icon=assets/icons/win/icon.ico --prune=true --out=release-builds --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"Electron Tutorial App\"",
+    "dist-linux": "electron-builder --linux",
+    "package-mac": "electron-packager . --protocol=docuedit --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds",
+    "package-win": "electron-packager . --protocol=docuedit electron-tutorial-app --overwrite --asar=true --platform=win32 --arch=ia32 --icon=assets/icons/win/icon.ico --prune=true --out=release-builds --version-string.CompanyName=CE --version-string.FileDescription=CE",
     "package-linux": "electron-packager . --protocol=docuedit electron-tutorial-app --overwrite --asar=true --platform=linux --arch=x64 --icon=assets/icons/png/1024x1024.png --prune=true --out=release-builds"
   },
   "protocols": [
@@ -99,11 +100,13 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "include": "build/installer.nsh",
-      "perMachine": true
+      "perMachine": true,
+      "createDesktopShortcut": false
     }
   },
   "dependencies": {
     "axios": "^0.24.0",
+    "chokidar": "^3.5.2",
     "express": "^4.17.1",
     "form-data": "^4.0.0",
     "open": "^8.2.1"
@@ -113,7 +116,7 @@
   },
   "devDependencies": {
     "electron": "^15.1.0",
-    "electron-builder": "^22.13.1",
+    "electron-builder": "^22.10.5",
     "electron-packager": "^15.4.0"
   },
   "description": ""

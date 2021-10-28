@@ -1,12 +1,13 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require("electron");
-const gotTheLock = app.requestSingleInstanceLock();
+const { app, BrowserWindow, Menu, ipcMain } = require("electron");
+const chokidar = require('chokidar');
 const path = require("path");
 const open = require('open');
 const axios = require('axios');
-const url = require("url");
 const fs = require('fs');
 const http = require('https');
 const FormData = require('form-data');
+
+const debug = false;
 
 const apiUrl = "https://docu-edit-demo-api.herokuapp.com/api/file";
 const tempName = "temp-document.docx";
@@ -25,6 +26,20 @@ let fileName = ""
 let mainWindow;
 let deeplinkingUrl;
 
+let templateMenu = [
+    {
+        label: "File",
+        submenu: [
+            {
+                label: "Close App",
+                click() {
+                    app.quit();
+                }
+            }
+        ]
+    }
+];
+
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
         app.setAsDefaultProtocolClient(protocolName, process.execPath, [path.resolve(process.argv[1])], ["url"]);
@@ -37,42 +52,44 @@ if (process.defaultApp) {
  * Functions
  */
 
-const openFile = async (file) => {
-    await open(`./${file}`, { wait: true });
+const openFile = (file) => {
+    return open(`./${file}`, { wait: true });
 }
 
 
-const startWatch = (tempName) => {
-    let fsWait = false;
-    return fs.watch(`./${tempName}`, { interval: 1000 }, (event, filename) => {
-        if (filename && event == "change") {
-            if (fsWait) return;
-            fsWait = setTimeout(() => {
-                fsWait = false;
-            }, 100);
-            // TODO: ONLY ENTER HERE ON CLICK SAVE BUTTON IN WORD
-            const firstFilePath = process.cwd() + "/" + tempName;
-            const formData = new FormData();
-            formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
-            const headers = {
-                ...formData.getHeaders(),
-                "Content-Length": formData.getLengthSync()
-            };
-            mainWindow.webContents.send("status", new Message(true, allStatus[4], true));
-            axios.post(apiUrl, formData, { headers }).then((resp) => {
-                mainWindow.webContents.send("status", new Message(true, allStatus[5]));
-            }, (err) => {
-                mainWindow.webContents.send("status", new Message(true, allStatus[3]));
+// sleep time expects milliseconds
+function sleep(time) {
+    return new Promise((resolve) => setTimeout(resolve, time));
+}
+
+
+const startWatch = () => {
+    return chokidar.watch(`./${tempName}`).on('change', () => {
+        const firstFilePath = process.cwd() + "/" + tempName;
+        const formData = new FormData();
+        formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
+        const headers = {
+            ...formData.getHeaders(),
+            "Content-Length": formData.getLengthSync()
+        };
+        mainWindow.webContents.send("status", new Message(true, allStatus[4], true));
+        axios.post(apiUrl, formData, { headers }).then((resp) => {
+            // console.log("saved");
+            mainWindow.webContents.send("status", new Message(true, allStatus[5]));
+            sleep(3000).then(() => {
+                mainWindow.webContents.send("status", new Message(true, allStatus[2]));
             });
-            console.log(event);
-            console.log(`${filename} file Changed`);
-        }
+        }, (err) => {
+            // console.log("error");
+            mainWindow.webContents.send("status", new Message(false, allStatus[3]));
+            devToolsLog(err);
+        });
     });
 }
 
 
 const devToolsLog = (s) => {
-    if (mainWindow && mainWindow.webContents) {
+    if (debug && mainWindow && mainWindow.webContents) {
         mainWindow.webContents.executeJavaScript(`console.log("${s}")`);
     }
 }
@@ -90,36 +107,40 @@ const isValidHttpUrl = (string) => {
 
 
 const initConnection = () => {
-    const endpoint = apiUrl; // TODO: borrar cando ete lista la api
+    const endpoint = fileName; // TODO: borrar cando ete lista la api
+    // const endpoint = apiUrl + "/" + fileName;
     if (
         fileName === "" ||
         fileName === undefined ||
         fileName == null ||
         !isValidHttpUrl(endpoint)
     ) {
+        devToolsLog('invalid: '+endpoint);
         mainWindow.webContents.send("status", new Message(false, allStatus[3]));
         return null;
     }
-    // const endpoint = apiUrl + "/" + fileName;
     mainWindow.webContents.send("status", new Message(true, allStatus[1], true));
     http.get(endpoint, function (response) {
         const file = fs.createWriteStream(tempName);
         response.pipe(file);
-        file.on("finish", function () { // cuando termina de cargar el archivo en memoria
-            const watcher = startWatch(tempName);
-            openFile(tempName).then(async () => {
+        file.on("finish", function () {
+            const watcher = startWatch();
+            openFile(tempName).then(() => {
                 file.close();
-                fs.unlinkSync(`./${tempName}`);
                 watcher.close();
+                fs.unlinkSync(`./${tempName}`);
+                app.quit();
                 mainWindow.webContents.send("status", new Message(true, allStatus[0]));
             });
             mainWindow.webContents.send("status", new Message(true, allStatus[2]));
         });
         file.on("error", function (err) {
-            mainWindow.webContents.send("status", new Message(true, "Error to open File"));
+            devToolsLog(err);
+            mainWindow.webContents.send("status", new Message(false, "Error to open File"));
         });
     }).on("error", function (e) {
-        mainWindow.webContents.send("status", new Message(true, allStatus[3]));
+        devToolsLog(e);
+        mainWindow.webContents.send("status", new Message(false, allStatus[3]));
     });
 
 }
@@ -137,12 +158,6 @@ function createWindow() {
         }
     });
 
-    mainWindow.loadURL(url.format({
-        pathname: path.join(__dirname, "views/index.html"),
-        protocol: "file",
-        slashes: true
-    }));
-
     mainWindow.loadFile(path.join(__dirname, "views/index.html"));
 
     const mainMenu = Menu.buildFromTemplate(templateMenu);
@@ -153,7 +168,7 @@ function createWindow() {
         app.quit();
     });
 
-    // mainWindow.webContents.openDevTools();
+    if (debug) mainWindow.webContents.openDevTools();
 
     deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://')); // can be undefined or null
 
@@ -175,30 +190,12 @@ function createWindow() {
  * App manage
  */
 
-let templateMenu = [
-    {
-        label: "File",
-        submenu: [
-            {
-                label: "Close App",
-                click() {
-                    app.quit();
-                }
-            }
-        ]
-    }
-];
-
-if (!gotTheLock) {
+if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
 
     app.on('second-instance', (event, commandLine, workingDirectory) => {
         const arguments = commandLine.toString().split(",");
-        if (process.platform !== 'darwin') {
-            // Find the arg that is our custom protocol url and store it
-            deeplinkingUrl = arguments.find((arg) => arg.startsWith(protocolName + '://'));
-        }
         // Someone tried to run a second instance, we should focus our window.
         if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore()
@@ -230,8 +227,14 @@ if (!gotTheLock) {
 // Handle the protocol. In this case, we choose to show an Error Box.
 app.on('open-url', (event, url) => {
     event.preventDefault();
-    dialog.showErrorBox('Welcome Back', `You arrived from: ${url}`)
-    deeplinkingUrl = url;
+    const params = new URLSearchParams(url);
+    fileName = params.get("url"); // or return null
+    if (fileName === "" || fileName == null) {
+        mainWindow.webContents.send("status", new Message(false, allStatus[6]));
+    }
+    else {
+        initConnection();
+    }
 });
 
 

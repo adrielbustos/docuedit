@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
 const chokidar = require('chokidar');
 const path = require("path");
 const open = require('open');
@@ -54,6 +54,8 @@ if (process.defaultApp) {
 
 const openFile = (file) => {
     return open(`./${file}`, { wait: true });
+    // return open(`./${file}`, { wait: true, app: app});
+    // return shell.openPath(file);
 }
 
 
@@ -64,7 +66,7 @@ function sleep(time) {
 
 
 const startWatch = () => {
-    return chokidar.watch(`./${tempName}`).on('change', () => {
+    return chokidar.watch(`./${tempName}`, {}).on('change', () => {
         const firstFilePath = process.cwd() + "/" + tempName;
         const formData = new FormData();
         formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
@@ -107,7 +109,7 @@ const isValidHttpUrl = (string) => {
 
 
 const initConnection = () => {
-    const endpoint = fileName; // TODO: borrar cando ete lista la api
+    const endpoint = fileName;
     // const endpoint = apiUrl + "/" + fileName;
     if (
         fileName === "" ||
@@ -115,7 +117,7 @@ const initConnection = () => {
         fileName == null ||
         !isValidHttpUrl(endpoint)
     ) {
-        devToolsLog('invalid: '+endpoint);
+        devToolsLog('invalid: ' + endpoint);
         mainWindow.webContents.send("status", new Message(false, allStatus[3]));
         return null;
     }
@@ -125,13 +127,27 @@ const initConnection = () => {
         response.pipe(file);
         file.on("finish", function () {
             const watcher = startWatch();
-            openFile(tempName).then(() => {
+            openFile(tempName).then(function () {
                 file.close();
                 watcher.close();
                 fs.unlinkSync(`./${tempName}`);
                 app.quit();
                 mainWindow.webContents.send("status", new Message(true, allStatus[0]));
-            });
+            }, (err) => {
+                console.log(err);
+            }).catch(err => console.log(err));
+            if (process.platform === "darwin") {
+                fs.watchFile(`./${tempName}`, (curr, prev) => {
+                    if (curr.dev === 0)
+                    {
+                        file.close();
+                        watcher.close();
+                        fs.unlinkSync(`./${tempName}`);
+                        app.quit();
+                        mainWindow.webContents.send("status", new Message(true, allStatus[0]));
+                    }
+                });
+            }
             mainWindow.webContents.send("status", new Message(true, allStatus[2]));
         });
         file.on("error", function (err) {

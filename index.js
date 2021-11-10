@@ -136,18 +136,6 @@ const initConnection = () => {
             }, (err) => {
                 console.log(err);
             }).catch(err => console.log(err));
-            if (process.platform === "darwin") {
-                fs.watchFile(`./${tempName}`, (curr, prev) => {
-                    if (curr.dev === 0)
-                    {
-                        file.close();
-                        watcher.close();
-                        fs.unlinkSync(`./${tempName}`);
-                        app.quit();
-                        mainWindow.webContents.send("status", new Message(true, allStatus[0]));
-                    }
-                });
-            }
             mainWindow.webContents.send("status", new Message(true, allStatus[2]));
         });
         file.on("error", function (err) {

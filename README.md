@@ -1,6 +1,6 @@
 # Aloe Document Edit
 ​
-Edit a Document docx file and commits drafts as the user saves the docuement using a Text Editor
+Allow a user to edit a Document docx file using a Text Editor and commits drafts to a server as the user saves it.
 ​
 ## Installation flow
 ​
@@ -36,13 +36,14 @@ Edit a Document docx file and commits drafts as the user saves the docuement usi
 ## UI Messages
 ​
     const allStatus = [
-        "Waiting for file editing",
-        "Openning file",
-        "File ready to edit",
-        "An error occurred while getting the file",
-        "Saving changes",
-        "File draft saved",
-        "Invalid link"
+    
+	    "Waiting for file editing", // 0
+	    "Openning file", // 1
+	    "File ready to edit", // 2
+	    "An error occurred while getting the file", // 3
+	    "Saving changes", // 4
+	    "File draft saved", // 5
+	    "Invalid link" // 6
     ];
     
 ## Test API
@@ -67,8 +68,8 @@ headerName: content-type; value: multipart/form-data
 ​
     200 - SUCCESS - Body:
     {
-        “File Name”: string // refers to file name upload
-        “Size”:  98653 // refers to file sizE
+	    “File Name”: string // refers to file name upload
+	    “Size”:  98653 // refers to file sizE
     }
 ​
     400 - MSG: No file Upload

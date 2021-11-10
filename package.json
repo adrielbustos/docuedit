@@ -87,15 +87,15 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "src/icon.ico",
+      "icon": "src/logo.ico",
       "requestedExecutionLevel": "requireAdministrator"
     },
     "mac": {
       "category": ""
     },
     "nsis": {
-      "installerIcon": "src/icon.ico",
-      "uninstallerIcon": "src/icon.ico",
+      "installerIcon": "src/logo.ico",
+      "uninstallerIcon": "src/logo.ico",
       "uninstallDisplayName": "Document edit",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

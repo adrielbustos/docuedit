@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const chokidar = require('chokidar');
 const path = require("path");
 const open = require('open');
@@ -7,10 +7,11 @@ const fs = require('fs');
 const http = require('https');
 const FormData = require('form-data');
 
-const debug = false;
+const debug = true;
 
 const apiUrl = "https://docu-edit-demo-api.herokuapp.com/api/file";
-const tempName = "temp-document.docx";
+const tempName = getAppDataPath("temp-document.docx");
+// const tempName = "temp-document.docx";
 const protocolName = "docuedit";
 const allStatus = [
     "Waiting for file editing",  // 0
@@ -54,14 +55,30 @@ if (process.defaultApp) {
 
 const openFile = (file) => {
     return open(`./${file}`, { wait: true });
-    // return open(`./${file}`, { wait: true, app: app});
-    // return shell.openPath(file);
 }
 
 
 // sleep time expects milliseconds
 function sleep(time) {
     return new Promise((resolve) => setTimeout(resolve, time));
+}
+
+function getAppDataPath(name = "") {
+    switch (process.platform) {
+        case "darwin": {
+            return path.join(process.env.HOME, "Library", "Application Support", name);
+        }
+        case "win32": {
+            return path.join(process.env.APPDATA, name);
+        }
+        case "linux": {
+            return path.join(process.env.HOME, `.${name}`);
+        }
+        default: {
+            devToolsLog("Unsupported platform!");
+            process.exit(1);
+        }
+    }
 }
 
 
@@ -76,13 +93,11 @@ const startWatch = () => {
         };
         mainWindow.webContents.send("status", new Message(true, allStatus[4], true));
         axios.post(apiUrl, formData, { headers }).then((resp) => {
-            // console.log("saved");
             mainWindow.webContents.send("status", new Message(true, allStatus[5]));
             sleep(3000).then(() => {
                 mainWindow.webContents.send("status", new Message(true, allStatus[2]));
             });
         }, (err) => {
-            // console.log("error");
             mainWindow.webContents.send("status", new Message(false, allStatus[3]));
             devToolsLog(err);
         });
@@ -258,28 +273,6 @@ app.on('activate', function () {
         createWindow();
     }
 });
-
-
-// if (process.env.NODE_ENV !== 'production') {
-//     templateMenu.push(
-//         {
-//             label: "Devs Tool",
-//             submenu: [
-//                 {
-//                     label: "Show/Hide",
-//                     click(item, focusedWindow) {
-//                         // mainWindow.webContents.openDevTools();
-//                         focusedWindow.toggleDevTools();
-//                     }
-//                 },
-//                 {
-//                     role: "Reload"
-//                 }
-//             ]
-//         }
-//     );
-// }
-
 
 if (process.platform === "darwin") {
     templateMenu.unshift(

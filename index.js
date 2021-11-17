@@ -9,9 +9,8 @@ const FormData = require('form-data');
 
 const debug = true;
 
-const apiUrl = "https://docu-edit-demo-api.herokuapp.com/api/file";
-const tempName = getAppDataPath("temp-document.docx");
-// const tempName = "temp-document.docx";
+const tempFilePath = getAppDataPath("temp-document.docx"); // name to save a temp instance of the file open (internal variable, ignore this)
+
 const protocolName = "docuedit";
 const allStatus = [
     "Waiting for file editing",  // 0
@@ -22,8 +21,12 @@ const allStatus = [
     "File draft saved", // 5
     "Invalid link" // 6
 ];
+const validHeadersContentTypes = [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+];
 
-let fileName = ""
+let urlParam = "";
+let fileName = "";
 let mainWindow;
 let deeplinkingUrl;
 
@@ -69,7 +72,8 @@ function getAppDataPath(name = "") {
             return path.join(process.env.HOME, "Library", "Application Support", name);
         }
         case "win32": {
-            return path.join(process.env.APPDATA, name);
+            // return path.join(process.env.APPDATA, name);
+            return `./${name}`;
         }
         case "linux": {
             return path.join(process.env.HOME, `.${name}`);
@@ -83,16 +87,16 @@ function getAppDataPath(name = "") {
 
 
 const startWatch = () => {
-    return chokidar.watch(`./${tempName}`, {}).on('change', () => {
-        const firstFilePath = process.cwd() + "/" + tempName;
+    return chokidar.watch(tempFilePath, {}).on('change', () => {
+        // const firstFilePath = process.cwd() + "/" + tempFilePath;
         const formData = new FormData();
-        formData.append("file", fs.createReadStream(firstFilePath), { knownLength: fs.statSync(firstFilePath).size });
+        formData.append("file", fs.createReadStream(tempFilePath), { knownLength: fs.statSync(tempFilePath).size });
         const headers = {
             ...formData.getHeaders(),
             "Content-Length": formData.getLengthSync()
         };
         mainWindow.webContents.send("status", new Message(true, allStatus[4], true));
-        axios.post(apiUrl, formData, { headers }).then((resp) => {
+        axios.post(urlParam, formData, { headers }).then((resp) => {
             mainWindow.webContents.send("status", new Message(true, allStatus[5]));
             sleep(3000).then(() => {
                 mainWindow.webContents.send("status", new Message(true, allStatus[2]));
@@ -124,33 +128,51 @@ const isValidHttpUrl = (string) => {
 
 
 const initConnection = () => {
-    const endpoint = fileName;
-    // const endpoint = apiUrl + "/" + fileName;
+    if (!urlParam || !fileName === null || fileName === undefined) {
+        mainWindow.webContents.send("status", new Message(false, allStatus[6]));
+        return;
+    }
+    const endpoint = urlParam + fileName;
     if (
-        fileName === "" ||
-        fileName === undefined ||
-        fileName == null ||
+        endpoint === "" ||
         !isValidHttpUrl(endpoint)
     ) {
         devToolsLog('invalid: ' + endpoint);
         mainWindow.webContents.send("status", new Message(false, allStatus[3]));
         return null;
     }
+    devToolsLog(endpoint);
     mainWindow.webContents.send("status", new Message(true, allStatus[1], true));
     http.get(endpoint, function (response) {
-        const file = fs.createWriteStream(tempName);
+        if (
+            response.statusCode != 200 || // "The url not exist" or 404
+            !validHeadersContentTypes.includes(response.headers["content-type"]) // "The file is not a valid file type"
+        ) {
+            devToolsLog("status code: " + response.statusCode);
+            mainWindow.webContents.send("status", new Message(false, allStatus[3])); 
+            return;
+        }
+        const file = fs.createWriteStream(tempFilePath);
         response.pipe(file);
         file.on("finish", function () {
             const watcher = startWatch();
-            openFile(tempName).then(function () {
+            openFile(tempFilePath).then(function () {
                 file.close();
                 watcher.close();
-                fs.unlinkSync(`./${tempName}`);
+                fs.unlinkSync(tempFilePath);
                 app.quit();
                 mainWindow.webContents.send("status", new Message(true, allStatus[0]));
             }, (err) => {
-                console.log(err);
-            }).catch(err => console.log(err));
+                // console.log(err);
+                devToolsLog("error in openFile function");
+                devToolsLog(err);
+                mainWindow.webContents.send("status", new Message(false, allStatus[3])); 
+            }).catch(err => {
+                // console.log(err);
+                devToolsLog("error in openFile function in catch");
+                devToolsLog(err);
+                mainWindow.webContents.send("status", new Message(false, allStatus[3]));
+            });
             mainWindow.webContents.send("status", new Message(true, allStatus[2]));
         });
         file.on("error", function (err) {
@@ -193,12 +215,14 @@ function createWindow() {
 
     if (deeplinkingUrl !== undefined || deeplinkingUrl != null) {
         const params = new URLSearchParams(deeplinkingUrl);
-        fileName = params.get("url"); // or return null
+        urlParam = params.get("apiUrl"); // or return null
+        fileName = params.get("file"); // or return null
     }
 
     ipcMain.on("loaded", (event, data) => {
         event.reply("status", new Message(true, allStatus[0]));
-        if (fileName !== "" && fileName != null) {
+        if (urlParam || urlParam !== "" || fileName || fileName !== "") {
+            // console.log("test");
             initConnection();
         }
     });
@@ -225,13 +249,10 @@ if (!app.requestSingleInstanceLock()) {
             }
             else {
                 const params = new URLSearchParams(deeplinkingUrl);
-                fileName = params.get("url");
-                if (fileName === "" || fileName == null) {
-                    mainWindow.webContents.send("status", new Message(false, allStatus[6]));
-                }
-                else {
-                    initConnection();
-                }
+                urlParam = params.get("apiUrl");
+                fileName = params.get("file");
+                // console.log("test 2");
+                initConnection();
             }
         }
     });
@@ -247,13 +268,10 @@ if (!app.requestSingleInstanceLock()) {
 app.on('open-url', (event, url) => {
     event.preventDefault();
     const params = new URLSearchParams(url);
-    fileName = params.get("url"); // or return null
-    if (fileName === "" || fileName == null) {
-        mainWindow.webContents.send("status", new Message(false, allStatus[6]));
-    }
-    else {
-        initConnection();
-    }
+    urlParam = params.get("apiUrl"); // or return null
+    fileName = params.get("file");
+    // console.log("test 3");
+    initConnection();
 });
 
 

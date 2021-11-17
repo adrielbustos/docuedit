@@ -46,10 +46,10 @@ let templateMenu = [
 
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient(protocolName, process.execPath, [path.resolve(process.argv[1])], ["url"]);
+        app.setAsDefaultProtocolClient(protocolName, process.execPath, [path.resolve(process.argv[1])], ["apiUrl", "file"]);
     }
 } else {
-    app.setAsDefaultProtocolClient(protocolName, ["url"]);
+    app.setAsDefaultProtocolClient(protocolName, ["apiUrl", "file"]);
 }
 
 /**

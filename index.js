@@ -7,28 +7,27 @@ const fs = require('fs');
 const http = require('https');
 const FormData = require('form-data');
 
-const debug = true;
 
-const tempFilePath = getAppDataPath("temp-document.docx"); // name to save a temp instance of the file open (internal variable, ignore this)
+const debug = true;
 
 const protocolName = "docuedit";
 const allStatus = [
     "Waiting for file editing",  // 0
-    "Openning file", // 1
+    "Opening file", // 1
     "File ready to edit",  // 2
     "An error occurred while getting the file",  // 3
     "Saving changes", // 4
     "File draft saved", // 5
     "Invalid link" // 6
 ];
-const validHeadersContentTypes = [
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-];
+
 
 let urlParam = "";
 let fileName = "";
+let tempFilePath = "";
 let mainWindow;
 let deeplinkingUrl;
+
 
 let templateMenu = [
     {
@@ -44,6 +43,7 @@ let templateMenu = [
     }
 ];
 
+
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
         app.setAsDefaultProtocolClient(protocolName, process.execPath, [path.resolve(process.argv[1])], ["apiUrl", "file"]);
@@ -56,8 +56,13 @@ if (process.defaultApp) {
  * Functions
  */
 
+
 const openFile = (file) => {
     return open(`./${file}`, { wait: true });
+}
+
+const isValidParam = (s) => {
+    return s !== "" && s !== null && s !== undefined
 }
 
 
@@ -65,6 +70,7 @@ const openFile = (file) => {
 function sleep(time) {
     return new Promise((resolve) => setTimeout(resolve, time));
 }
+
 
 function getAppDataPath(name = "") {
     switch (process.platform) {
@@ -128,11 +134,12 @@ const isValidHttpUrl = (string) => {
 
 
 const initConnection = () => {
-    if (!urlParam || !fileName === null || fileName === undefined) {
+    if (!isValidParam(urlParam) || !isValidParam(fileName)) {
         mainWindow.webContents.send("status", new Message(false, allStatus[6]));
         return;
     }
-    const endpoint = urlParam + fileName;
+    const endpoint = urlParam + "?file=" + fileName;
+    devToolsLog(endpoint);
     if (
         endpoint === "" ||
         !isValidHttpUrl(endpoint)
@@ -141,12 +148,12 @@ const initConnection = () => {
         mainWindow.webContents.send("status", new Message(false, allStatus[3]));
         return null;
     }
-    devToolsLog(endpoint);
     mainWindow.webContents.send("status", new Message(true, allStatus[1], true));
     http.get(endpoint, function (response) {
+        console.log("success");
         if (
-            response.statusCode != 200 || // "The url not exist" or 404
-            !validHeadersContentTypes.includes(response.headers["content-type"]) // "The file is not a valid file type"
+            response.statusCode != 200 // "The url not exist" or 404
+            // !validHeadersContentTypes.includes(response.headers["content-type"]) // "The file is not a valid file type"
         ) {
             devToolsLog("status code: " + response.statusCode);
             mainWindow.webContents.send("status", new Message(false, allStatus[3])); 
@@ -213,17 +220,22 @@ function createWindow() {
 
     deeplinkingUrl = process.argv.find((arg) => arg.startsWith(protocolName + '://')); // can be undefined or null
 
-    if (deeplinkingUrl !== undefined || deeplinkingUrl != null) {
+    if (deeplinkingUrl !== undefined && deeplinkingUrl != null) {
         const params = new URLSearchParams(deeplinkingUrl);
         urlParam = params.get("apiUrl"); // or return null
         fileName = params.get("file"); // or return null
+        tempFilePath = getAppDataPath(fileName);
     }
 
     ipcMain.on("loaded", (event, data) => {
         event.reply("status", new Message(true, allStatus[0]));
-        if (urlParam || urlParam !== "" || fileName || fileName !== "") {
-            // console.log("test");
+        if (isValidParam(urlParam) && isValidParam(fileName)) { // if ok
             initConnection();
+        } else if (
+            (isValidParam(fileName) && !isValidParam(urlParam)) ||
+            (!isValidParam(fileName) && isValidParam(urlParam))
+        ) {
+            event.reply("status", new Message(true, allStatus[6]));
         }
     });
 
@@ -236,7 +248,6 @@ function createWindow() {
 if (!app.requestSingleInstanceLock()) {
     app.quit();
 } else {
-
     app.on('second-instance', (event, commandLine, workingDirectory) => {
         const arguments = commandLine.toString().split(",");
         // Someone tried to run a second instance, we should focus our window.
@@ -246,12 +257,11 @@ if (!app.requestSingleInstanceLock()) {
             deeplinkingUrl = arguments.find((arg) => arg.startsWith(protocolName + '://'));
             if (deeplinkingUrl === undefined) {
                 mainWindow.webContents.send("status", new Message(false, allStatus[6]));
-            }
-            else {
+            } else {
                 const params = new URLSearchParams(deeplinkingUrl);
                 urlParam = params.get("apiUrl");
                 fileName = params.get("file");
-                // console.log("test 2");
+                tempFilePath = getAppDataPath(fileName);
                 initConnection();
             }
         }
@@ -270,7 +280,7 @@ app.on('open-url', (event, url) => {
     const params = new URLSearchParams(url);
     urlParam = params.get("apiUrl"); // or return null
     fileName = params.get("file");
-    // console.log("test 3");
+    tempFilePath = getAppDataPath(fileName);
     initConnection();
 });
 
@@ -292,6 +302,7 @@ app.on('activate', function () {
     }
 });
 
+
 if (process.platform === "darwin") {
     templateMenu.unshift(
         {
@@ -299,6 +310,7 @@ if (process.platform === "darwin") {
         }
     );
 }
+
 
 class Message {
     status = false;

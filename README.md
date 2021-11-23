@@ -25,25 +25,28 @@ Allow a user to edit a Document docx file using a Text Editor and commits drafts
 ​
 ## Config
 ​
-- Application Schema: `docuedit://&url=<DOCUMENT_URL>`
+- Application Schema: `docuedit://&apiUrl=https://<API_URL>&file=<FILE_NAME>`
 ​
 - Application Server test GET: `https://docu-edit-demo-api.herokuapp.com/api/file`
 ​
 - Application Server test POST: `https://docu-edit-demo-api.herokuapp.com/api/file`
+
+## "apiUrl" and "file" params usage
 ​
-  
+- For get the file, a url is generated with the following format: <API_URL> + "?file" + <FILE_NAME>
+
+- For save/post the file, a POST request to <API_URL> is send with the file named "file"
 ​
 ## UI Messages
 ​
     const allStatus = [
-    
-	    "Waiting for file editing", // 0
-	    "Openning file", // 1
-	    "File ready to edit", // 2
-	    "An error occurred while getting the file", // 3
-	    "Saving changes", // 4
-	    "File draft saved", // 5
-	    "Invalid link" // 6
+	    "Waiting for file editing",
+	    "Openning file",
+	    "File ready to edit",
+	    "An error occurred while getting the file",
+	    "Saving changes",
+	    "File draft saved",
+	    "Invalid link"
     ];
     
 ## Test API
